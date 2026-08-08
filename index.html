@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>עוברים לארה"ב - הכל למכירה</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f7f5f1;
+    --card-bg:#ffffff;
+    --text:#2b2b2b;
+    --muted:#767676;
+    --accent:#1f6f3f;
+    --accent-dark:#154e2c;
+    --sold:#b3372f;
+    --border:#e5e1d8;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Assistant', sans-serif;
+    background:var(--bg);
+    color:var(--text);
+  }
+  header{
+    padding:28px 20px 18px;
+    text-align:center;
+    border-bottom:1px solid var(--border);
+    background:var(--card-bg);
+  }
+  header h1{
+    margin:0 0 6px;
+    font-size:26px;
+    font-weight:700;
+  }
+  header p{
+    margin:0;
+    color:var(--muted);
+    font-size:15px;
+  }
+  #search-bar{
+    max-width:900px;
+    margin:16px auto 0;
+    padding:0 16px;
+    display:flex;
+    gap:8px;
+  }
+  #search-bar input{
+    flex:1;
+    padding:10px 14px;
+    border-radius:10px;
+    border:1px solid var(--border);
+    font-family:inherit;
+    font-size:15px;
+  }
+  main{
+    max-width:1100px;
+    margin:0 auto;
+    padding:24px 16px 60px;
+  }
+  #status-msg{
+    text-align:center;
+    color:var(--muted);
+    padding:40px 10px;
+  }
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(240px, 1fr));
+    gap:20px;
+  }
+  .card{
+    background:var(--card-bg);
+    border:1px solid var(--border);
+    border-radius:14px;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+    transition:box-shadow .15s ease;
+  }
+  .card:hover{
+    box-shadow:0 4px 16px rgba(0,0,0,.08);
+  }
+  .card.sold{
+    opacity:.6;
+  }
+  .img-wrap{
+    position:relative;
+    width:100%;
+    aspect-ratio:4/3;
+    background:#eee;
+    overflow:hidden;
+  }
+  .img-wrap img{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    display:block;
+  }
+  .thumbs{
+    display:flex;
+    gap:4px;
+    padding:6px;
+    background:rgba(255,255,255,.9);
+    position:absolute;
+    bottom:0;
+    right:0;
+    left:0;
+  }
+  .thumbs img{
+    width:36px;
+    height:36px;
+    object-fit:cover;
+    border-radius:6px;
+    cursor:pointer;
+    border:2px solid transparent;
+  }
+  .thumbs img.active{
+    border-color:var(--accent);
+  }
+  .sold-badge{
+    position:absolute;
+    top:10px;
+    left:10px;
+    background:var(--sold);
+    color:#fff;
+    font-weight:700;
+    font-size:13px;
+    padding:4px 10px;
+    border-radius:20px;
+  }
+  .card-body{
+    padding:14px 16px 16px;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    flex:1;
+  }
+  .card-body h3{
+    margin:0;
+    font-size:18px;
+    font-weight:700;
+  }
+  .price{
+    font-size:17px;
+    font-weight:700;
+    color:var(--accent-dark);
+  }
+  .desc{
+    font-size:14px;
+    color:var(--muted);
+    white-space:pre-line;
+    flex:1;
+  }
+  .wa-btn{
+    margin-top:8px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    background:var(--accent);
+    color:#fff;
+    text-decoration:none;
+    padding:10px 14px;
+    border-radius:10px;
+    font-weight:600;
+    font-size:15px;
+  }
+  .wa-btn:hover{
+    background:var(--accent-dark);
+  }
+  .wa-btn.disabled{
+    background:#bbb;
+    pointer-events:none;
+  }
+  footer{
+    text-align:center;
+    color:var(--muted);
+    font-size:13px;
+    padding:20px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>עוברים לארה"ב - הכל למכירה</h1>
+  <p>לחצו על פריט כדי לשלוח הודעה בוואטסאפ</p>
+  <div id="search-bar">
+    <input type="text" id="search" placeholder="חיפוש פריט...">
+  </div>
+</header>
+
+<main>
+  <div id="status-msg">טוען פריטים...</div>
+  <div class="grid" id="grid"></div>
+</main>
+
+<footer>העמוד מתעדכן אוטומטית מגיליון Google Sheets</footer>
+
+<script>
+// ====== CONFIG ======
+// Replace with your published Google Sheet CSV link:
+// Google Sheet -> File -> Share -> Publish to web -> choose the sheet -> CSV -> Publish -> copy link here
+const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSO7Ho_Xoto3neC52H8Iolhj1tQzFcrutAI7qEfLZjJ9_fFwOHLsYPnK6-4PcB7zZXkLVgIp8EaWVK8/pub?gid=460288985&single=true&output=csv";
+const WHATSAPP_NUMBER = "972547613036"; // no + no leading zero
+// =====================
+
+let allItems = [];
+
+function parseCSV(text) {
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i], next = text[i+1];
+    if (inQuotes) {
+      if (c === '"' && next === '"') { field += '"'; i++; }
+      else if (c === '"') { inQuotes = false; }
+      else { field += c; }
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ',') { row.push(field); field=''; }
+      else if (c === '\n') { row.push(field); rows.push(row); row=[]; field=''; }
+      else if (c === '\r') { /* skip */ }
+      else field += c;
+    }
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  return rows.filter(r => r.some(c => c.trim() !== ''));
+}
+
+function rowsToObjects(rows) {
+  const headers = rows[0].map(h => h.trim().toLowerCase());
+  return rows.slice(1).map(r => {
+    const obj = {};
+    headers.forEach((h, i) => obj[h] = (r[i] || '').trim());
+    return obj;
+  });
+}
+
+function waLink(itemName) {
+  const msg = `שלום, אני מתעניין/ת בפריט: ${itemName}`;
+  return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`;
+}
+
+function isSold(status) {
+  return (status || '').trim() === 'נמכר';
+}
+
+function render(items) {
+  const grid = document.getElementById('grid');
+  const statusMsg = document.getElementById('status-msg');
+  grid.innerHTML = '';
+
+  if (!items.length) {
+    statusMsg.textContent = 'לא נמצאו פריטים.';
+    statusMsg.style.display = 'block';
+    return;
+  }
+  statusMsg.style.display = 'none';
+
+  items.forEach(item => {
+    const images = (item.images || '').split('|').map(s => s.trim()).filter(Boolean);
+    const mainImg = images[0] ? `images/${images[0]}` : '';
+    const sold = isSold(item.status);
+
+    const card = document.createElement('div');
+    card.className = 'card' + (sold ? ' sold' : '');
+
+    const imgWrap = document.createElement('div');
+    imgWrap.className = 'img-wrap';
+    const img = document.createElement('img');
+    img.src = mainImg;
+    img.alt = item.name || '';
+    imgWrap.appendChild(img);
+
+    if (sold) {
+      const badge = document.createElement('div');
+      badge.className = 'sold-badge';
+      badge.textContent = 'נמכר';
+      imgWrap.appendChild(badge);
+    }
+
+    if (images.length > 1) {
+      const thumbs = document.createElement('div');
+      thumbs.className = 'thumbs';
+      images.forEach((fn, idx) => {
+        const t = document.createElement('img');
+        t.src = `images/${fn}`;
+        if (idx === 0) t.classList.add('active');
+        t.addEventListener('click', () => {
+          img.src = `images/${fn}`;
+          thumbs.querySelectorAll('img').forEach(x => x.classList.remove('active'));
+          t.classList.add('active');
+        });
+        thumbs.appendChild(t);
+      });
+      imgWrap.appendChild(thumbs);
+    }
+
+    const body = document.createElement('div');
+    body.className = 'card-body';
+
+    const h3 = document.createElement('h3');
+    h3.textContent = item.name || '';
+    body.appendChild(h3);
+
+    if (item.price) {
+      const price = document.createElement('div');
+      price.className = 'price';
+      price.textContent = `₪${item.price}`;
+      body.appendChild(price);
+    }
+
+    if (item.description) {
+      const desc = document.createElement('div');
+      desc.className = 'desc';
+      desc.textContent = item.description;
+      body.appendChild(desc);
+    }
+
+    const btn = document.createElement('a');
+    btn.className = 'wa-btn' + (sold ? ' disabled' : '');
+    btn.href = sold ? '#' : waLink(item.name || '');
+    btn.target = '_blank';
+    btn.rel = 'noopener';
+    btn.textContent = sold ? 'נמכר' : 'שלח הודעה בוואטסאפ';
+    body.appendChild(btn);
+
+    card.appendChild(imgWrap);
+    card.appendChild(body);
+    grid.appendChild(card);
+  });
+}
+
+function applyFilter() {
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  if (!q) { render(allItems); return; }
+  const filtered = allItems.filter(item =>
+    (item.name || '').toLowerCase().includes(q) ||
+    (item.description || '').toLowerCase().includes(q)
+  );
+  render(filtered);
+}
+
+document.getElementById('search').addEventListener('input', applyFilter);
+
+async function loadItems() {
+  const statusMsg = document.getElementById('status-msg');
+  try {
+    if (!SHEET_CSV_URL || SHEET_CSV_URL.indexOf('PASTE_YOUR') === 0) {
+      statusMsg.textContent = 'יש להגדיר קישור לגיליון Google Sheets בקובץ index.html (SHEET_CSV_URL).';
+      return;
+    }
+    const res = await fetch(SHEET_CSV_URL + (SHEET_CSV_URL.includes('?') ? '&' : '?') + 'cachebust=' + Date.now());
+    if (!res.ok) throw new Error('fetch failed');
+    const text = await res.text();
+    const rows = parseCSV(text);
+    allItems = rowsToObjects(rows).filter(it => it.name);
+    render(allItems);
+  } catch (err) {
+    statusMsg.textContent = 'שגיאה בטעינת הפריטים. ודאו שהגיליון פורסם לאינטרנט כ-CSV.';
+    console.error(err);
+  }
+}
+
+loadItems();
+</script>
+
+</body>
+</html>
