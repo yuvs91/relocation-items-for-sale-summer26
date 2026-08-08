@@ -274,7 +274,11 @@
 // Replace with your published Google Sheet CSV link:
 // Google Sheet -> File -> Share -> Publish to web -> choose the sheet -> CSV -> Publish -> copy link here
 const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSO7Ho_Xoto3neC52H8Iolhj1tQzFcrutAI7qEfLZjJ9_fFwOHLsYPnK6-4PcB7zZXkLVgIp8EaWVK8/pub?gid=460288985&single=true&output=csv";
-const WHATSAPP_NUMBER = "972547613036"; // no + no leading zero
+// Phone number is stored base64-encoded so it doesn't appear as plain text in the
+// repo (avoids simple automated scraping). To change the number: encode the new
+// digits (no +, no leading 0) at base64encode.org, or in a browser console run:
+// btoa("972500000000")
+const WHATSAPP_NUMBER = atob("OTcyNTQ3NjEzMDM2");
 // =====================
 
 let allItems = [];
