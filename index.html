@@ -148,6 +148,11 @@
     font-weight:700;
     color:var(--accent-dark);
   }
+  .availability{
+    font-size:14px;
+    font-weight:600;
+    color:var(--muted);
+  }
   .desc{
     font-size:14px;
     color:var(--muted);
@@ -421,6 +426,13 @@ function render(items) {
     const h3 = document.createElement('h3');
     h3.textContent = item.name || '';
     body.appendChild(h3);
+
+    if (item.availability) {
+      const avail = document.createElement('div');
+      avail.className = 'availability';
+      avail.textContent = `זמינות: ${item.availability}`;
+      body.appendChild(avail);
+    }
 
     if (item.price) {
       const price = document.createElement('div');
