@@ -65,6 +65,71 @@
     color:var(--muted);
     padding:40px 10px;
   }
+  .controls-bar{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:20px;
+  }
+  .controls-bar label{
+    font-size:14px;
+    color:var(--muted);
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .controls-bar select{
+    padding:8px 12px;
+    border-radius:8px;
+    border:1px solid var(--border);
+    font-family:inherit;
+    font-size:14px;
+    background:#fff;
+    color:var(--text);
+  }
+  .group{
+    border:1px solid var(--border);
+    border-radius:14px;
+    background:var(--card-bg);
+    margin-bottom:22px;
+    overflow:hidden;
+  }
+  .group[hidden]{
+    display:none;
+  }
+  .group-header{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:16px 18px;
+    cursor:pointer;
+    font-weight:700;
+    font-size:17px;
+    list-style:none;
+  }
+  .group-header::-webkit-details-marker{
+    display:none;
+  }
+  .group-header .count{
+    color:var(--muted);
+    font-weight:500;
+    font-size:14px;
+  }
+  .group-header .arrow{
+    margin-inline-start:auto;
+    transition:transform .15s ease;
+    color:var(--muted);
+  }
+  details[open] > .group-header .arrow{
+    transform:rotate(180deg);
+  }
+  .group.free .group-header{
+    color:var(--accent-dark);
+  }
+  .group-body{
+    padding:0 18px 18px;
+  }
   .grid{
     display:grid;
     grid-template-columns:repeat(auto-fill, minmax(240px, 1fr));
@@ -257,7 +322,39 @@
 
 <main>
   <div id="status-msg">טוען פריטים...</div>
-  <div class="grid" id="grid"></div>
+
+  <div class="controls-bar" id="controls-bar" hidden>
+    <label>מיון:
+      <select id="sort-field">
+        <option value="">ברירת מחדל</option>
+        <option value="availability">זמינות</option>
+        <option value="price">מחיר</option>
+        <option value="name">א-ב</option>
+      </select>
+    </label>
+    <select id="sort-dir">
+      <option value="asc">עולה</option>
+      <option value="desc">יורד</option>
+    </select>
+  </div>
+
+  <details class="group free" id="group-free" open hidden>
+    <summary class="group-header">
+      <span>🎁 למסירה בחינם</span>
+      <span class="count" id="count-free"></span>
+      <span class="arrow">▾</span>
+    </summary>
+    <div class="group-body"><div class="grid" id="grid-free"></div></div>
+  </details>
+
+  <details class="group" id="group-paid" open hidden>
+    <summary class="group-header">
+      <span>למכירה</span>
+      <span class="count" id="count-paid"></span>
+      <span class="arrow">▾</span>
+    </summary>
+    <div class="group-body"><div class="grid" id="grid-paid"></div></div>
+  </details>
 </main>
 
 <footer>העמוד מתעדכן אוטומטית מגיליון Google Sheets</footer>
@@ -279,6 +376,10 @@ const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSO7Ho_Xo
 // digits (no +, no leading 0) at base64encode.org, or in a browser console run:
 // btoa("972500000000")
 const WHATSAPP_NUMBER = atob("OTcyNTQ3NjEzMDM2");
+// Precedence for sorting by "זמינות", closest to farthest. Text in the sheet must
+// match one of these exactly (spelling and dashes) to be sorted correctly - anything
+// that doesn't match is treated as unknown and placed at the end of the sort.
+const AVAILABILITY_ORDER = ["מיידית", "תחילת ספטמבר", "אמצע-סוף ספטמבר", "סוף ספטמבר"];
 // =====================
 
 let allItems = [];
@@ -368,19 +469,53 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowRight') document.getElementById('lightbox-prev').click();
 });
 
-function render(items) {
-  const grid = document.getElementById('grid');
-  const statusMsg = document.getElementById('status-msg');
-  grid.innerHTML = '';
+function isFree(item) {
+  const p = (item.price || '').toString().trim();
+  return p !== '' && parseFloat(p) === 0;
+}
 
-  if (!items.length) {
-    statusMsg.textContent = 'לא נמצאו פריטים.';
-    statusMsg.style.display = 'block';
-    return;
+function parsePriceValue(item) {
+  const raw = (item.price || '').toString().replace(/[^0-9.\-]/g, '');
+  if (raw === '') return null;
+  const n = parseFloat(raw);
+  return isNaN(n) ? null : n;
+}
+
+function getSortValue(item, field) {
+  if (field === 'price') {
+    return parsePriceValue(item);
   }
-  statusMsg.style.display = 'none';
+  if (field === 'name') {
+    const n = (item.name || '').trim();
+    return n === '' ? null : n;
+  }
+  if (field === 'availability') {
+    const raw = (item.availability || '').trim();
+    const idx = AVAILABILITY_ORDER.indexOf(raw);
+    return idx === -1 ? null : idx;
+  }
+  return null;
+}
 
-  items.forEach(item => {
+function sortItems(items, field, dir) {
+  if (!field) return items.slice();
+  const indexed = items.map((it, idx) => ({ it, idx }));
+  indexed.sort((x, y) => {
+    const a = getSortValue(x.it, field);
+    const b = getSortValue(y.it, field);
+    const aMissing = a === null;
+    const bMissing = b === null;
+    if (aMissing && bMissing) return x.idx - y.idx;
+    if (aMissing) return 1;
+    if (bMissing) return -1;
+    let cmp = (field === 'name') ? a.localeCompare(b, 'he') : (a - b);
+    if (cmp === 0) return x.idx - y.idx;
+    return dir === 'desc' ? -cmp : cmp;
+  });
+  return indexed.map(x => x.it);
+}
+
+function buildCard(item) {
     const images = (item.images || '').split('|').map(s => s.trim()).filter(Boolean);
     const mainImg = images[0] ? `images/${images[0]}` : '';
     const sold = isSold(item.status);
@@ -438,7 +573,7 @@ function render(items) {
       body.appendChild(avail);
     }
 
-    if (item.price) {
+    if (item.price && !isFree(item)) {
       const price = document.createElement('div');
       price.className = 'price';
       price.textContent = `₪${item.price}`;
@@ -462,21 +597,55 @@ function render(items) {
 
     card.appendChild(imgWrap);
     card.appendChild(body);
-    grid.appendChild(card);
-  });
+    return card;
 }
 
-function applyFilter() {
+function renderGroup(items, gridId, countId) {
+  const grid = document.getElementById(gridId);
+  grid.innerHTML = '';
+  items.forEach(item => grid.appendChild(buildCard(item)));
+  document.getElementById(countId).textContent = `(${items.length})`;
+}
+
+function refreshView() {
+  const statusMsg = document.getElementById('status-msg');
+  const controlsBar = document.getElementById('controls-bar');
+  const groupFree = document.getElementById('group-free');
+  const groupPaid = document.getElementById('group-paid');
+
   const q = document.getElementById('search').value.trim().toLowerCase();
-  if (!q) { render(allItems); return; }
-  const filtered = allItems.filter(item =>
+  const filtered = !q ? allItems : allItems.filter(item =>
     (item.name || '').toLowerCase().includes(q) ||
     (item.description || '').toLowerCase().includes(q)
   );
-  render(filtered);
+
+  if (!filtered.length) {
+    statusMsg.textContent = 'לא נמצאו פריטים.';
+    statusMsg.style.display = 'block';
+    controlsBar.hidden = true;
+    groupFree.hidden = true;
+    groupPaid.hidden = true;
+    return;
+  }
+  statusMsg.style.display = 'none';
+  controlsBar.hidden = false;
+
+  const sortField = document.getElementById('sort-field').value;
+  const sortDir = document.getElementById('sort-dir').value;
+
+  const free = sortItems(filtered.filter(isFree), sortField, sortDir);
+  const paid = sortItems(filtered.filter(it => !isFree(it)), sortField, sortDir);
+
+  groupFree.hidden = free.length === 0;
+  groupPaid.hidden = paid.length === 0;
+
+  if (free.length) renderGroup(free, 'grid-free', 'count-free');
+  if (paid.length) renderGroup(paid, 'grid-paid', 'count-paid');
 }
 
-document.getElementById('search').addEventListener('input', applyFilter);
+document.getElementById('search').addEventListener('input', refreshView);
+document.getElementById('sort-field').addEventListener('change', refreshView);
+document.getElementById('sort-dir').addEventListener('change', refreshView);
 
 async function loadItems() {
   const statusMsg = document.getElementById('status-msg');
@@ -490,7 +659,7 @@ async function loadItems() {
     const text = await res.text();
     const rows = parseCSV(text);
     allItems = rowsToObjects(rows).filter(it => it.name);
-    render(allItems);
+    refreshView();
   } catch (err) {
     statusMsg.textContent = 'שגיאה בטעינת הפריטים. ודאו שהגיליון פורסם לאינטרנט כ-CSV.';
     console.error(err);
