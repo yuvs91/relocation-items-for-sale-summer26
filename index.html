@@ -326,10 +326,10 @@
   <div class="controls-bar" id="controls-bar" hidden>
     <label>מיון:
       <select id="sort-field">
-        <option value="">ברירת מחדל</option>
-        <option value="availability">זמינות</option>
+        <option value="availability" selected>זמינות</option>
         <option value="price">מחיר</option>
         <option value="name">א-ב</option>
+        <option value="">לפי סדר הגיליון</option>
       </select>
     </label>
     <select id="sort-dir">
@@ -475,9 +475,12 @@ function isFree(item) {
 }
 
 function parsePriceValue(item) {
-  const raw = (item.price || '').toString().replace(/[^0-9.\-]/g, '');
-  if (raw === '') return null;
-  const n = parseFloat(raw);
+  // Takes the FIRST number found in the price text, so values like
+  // "50 לאחד, 100 לשניהם" sort by 50, not by the whole string mashed together.
+  const raw = (item.price || '').toString();
+  const match = raw.match(/\d+(\.\d+)?/);
+  if (!match) return null;
+  const n = parseFloat(match[0]);
   return isNaN(n) ? null : n;
 }
 
